@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enhanced Fountain Editor</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        
+        .editor-container {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 40px);
+        }
+        
+        .editor-panel {
+            flex: 1;
+            background: #252526;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .preview-panel {
+            flex: 1;
+            background: #252526;
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .fountain-editor {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border: none;
+            color: #d4d4d4;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+        }
+        
+        .toolbar {
+            background: #2d2d30;
+            padding: 10px;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .toolbar button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        
+        .toolbar button:hover {
+            background: #1177bb;
+        }
+        
+        .fountain-element {
+            margin: 10px 0;
+            padding: 5px;
+            border-radius: 4px;
+            position: relative;
+        }
+        
+        .scene-heading {
+            background: rgba(0, 123, 255, 0.1);
+            color: #007bff;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .character {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+            font-weight: bold;
+            text-align: center;
+            margin: 15px 0 5px 0;
+        }
+        
+        .dialogue {
+            background: rgba(255, 193, 7, 0.1);
+            color: #ffc107;
+            margin-left: 40px;
+            margin-right: 40px;
+        }
+        
+        .parenthetical {
+            background: rgba(108, 117, 125, 0.1);
+            color: #6c757d;
+            font-style: italic;
+            margin-left: 60px;
+            margin-right: 60px;
+        }
+        
+        .action {
+            background: rgba(248, 249, 250, 0.1);
+            color: #f8f9fa;
+            margin: 10px 0;
+        }
+        
+        .transition {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            text-align: right;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .note {
+            background: rgba(255, 107, 107, 0.1);
+            color: #ff6b6b;
+            font-style: italic;
+            border-left: 3px solid #ff6b6b;
+            padding-left: 10px;
+        }
+        
+        .editable {
+            border: 1px dashed transparent;
+            cursor: text;
+        }
+        
+        .editable:hover {
+            border-color: #007bff;
+            background: rgba(0, 123, 255, 0.05);
+        }
+        
+        .editing {
+            border-color: #007bff;
+            background: rgba(0, 123, 255, 0.1);
+        }
+        
+        .element-type {
+            position: absolute;
+            top: -15px;
+            left: 5px;
+            font-size: 10px;
+            background: #007bff;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .fountain-element:hover .element-type {
+            opacity: 1;
+        }
+        
+        .suggestions {
+            position: absolute;
+            background: #2d2d30;
+            border: 1px solid #454545;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 1000;
+            min-width: 200px;
+        }
+        
+        .suggestion-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #454545;
+        }
+        
+        .suggestion-item:hover {
+            background: #007bff;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="insertElement('scene')">Scene Heading</button>
+        <button onclick="insertElement('character')">Character</button>
+        <button onclick="insertElement('dialogue')">Dialogue</button>
+        <button onclick="insertElement('parenthetical')">Parenthetical</button>
+        <button onclick="insertElement('action')">Action</button>
+        <button onclick="insertElement('transition')">Transition</button>
+        <button onclick="insertElement('note')">Note</button>
+        <button onclick="exportFountain()">Export .fountain</button>
+        <button onclick="importFountain()">Import</button>
+        <input type="file" id="fileInput" accept=".fountain,.txt" style="display: none;" onchange="handleFileImport(event)">
+    </div>
+    
+    <div class="editor-container">
+        <div class="editor-panel">
+            <h3>Enhanced Fountain Editor</h3>
+            <div id="fountainEditor" class="fountain-editor" contenteditable="true"></div>
+        </div>
+        
+        <div class="preview-panel">
+            <h3>Live Preview</h3>
+            <div id="preview"></div>
+        </div>
+    </div>
+
+    <script>
+        class EnhancedFountainEditor {
+            constructor() {
+                this.editor = document.getElementById('fountainEditor');
+                this.preview = document.getElementById('preview');
+                this.characters = new Set();
+                this.locations = new Set();
+                this.currentSuggestions = null;
+                
+                this.setupEditor();
+                this.loadSampleContent();
+            }
+            
+            setupEditor() {
+                this.editor.addEventListener('input', () => this.updatePreview());
+                this.editor.addEventListener('keydown', (e) => this.handleKeyDown(e));
+                this.editor.addEventListener('paste', (e) => this.handlePaste(e));
+                
+                // Add click handler for inline editing
+                this.editor.addEventListener('click', (e) => this.handleClick(e));
+            }
+            
+            handleKeyDown(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.handleEnter();
+                } else if (e.key === 'Tab') {
+                    e.preventDefault();
+                    this.handleTab();
+                } else if (e.key === '@') {
+                    this.showCharacterSuggestions();
+                } else if (e.key === 'Escape') {
+                    this.hideSuggestions();
+                }
+            }
+            
+            handleEnter() {
+                const selection = window.getSelection();
+                const range = selection.getRangeAt(0);
+                
+                // Create new line with proper element detection
+                const br = document.createElement('br');
+                range.insertNode(br);
+                range.setStartAfter(br);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                
+                this.updatePreview();
+            }
+            
+            handleTab() {
+                // Convert current line to different element types based on context
+                const selection = window.getSelection();
+                const currentElement = selection.anchorNode.parentElement;
+                
+                // Cycle through element types
+                this.cycleElementType(currentElement);
+            }
+            
+            handleClick(e) {
+                const element = e.target.closest('.fountain-element');
+                if (element) {
+                    this.makeElementEditable(element);
+                }
+            }
+            
+            makeElementEditable(element) {
+                element.classList.add('editing');
+                element.contentEditable = true;
+                element.focus();
+                
+                element.addEventListener('blur', () => {
+                    element.classList.remove('editing');
+                    this.updatePreview();
+                }, { once: true });
+            }
+            
+            parseFountainText(text) {
+                const lines = text.split('\n');
+                const elements = [];
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    if (!line) continue;
+                    
+                    const element = this.identifyElement(line);
+                    elements.push(element);
+                }
+                
+                return elements;
+            }
+            
+            identifyElement(line) {
+                // Scene headings
+                if (/^(INT\.|EXT\.|EST\.|int\.|ext\.|est\.)/i.test(line)) {
+                    return { type: 'scene', text: line };
+                }
+                
+                // Character names (all caps, centered)
+                if (/^[A-Z\s]+$/.test(line) && line.length < 50) {
+                    this.characters.add(line);
+                    return { type: 'character', text: line };
+                }
+                
+                // Parentheticals
+                if (/^\(.+\)$/.test(line)) {
+                    return { type: 'parenthetical', text: line };
+                }
+                
+                // Transitions
+                if (/^(FADE IN:|FADE OUT:|CUT TO:|DISSOLVE TO:)/i.test(line)) {
+                    return { type: 'transition', text: line };
+                }
+                
+                // Notes
+                if (/^\[\[.+\]\]$/.test(line)) {
+                    return { type: 'note', text: line };
+                }
+                
+                // Default to action or dialogue based on context
+                return { type: 'action', text: line };
+            }
+            
+            renderElement(element) {
+                const div = document.createElement('div');
+                div.className = `fountain-element ${element.type} editable`;
+                div.innerHTML = `
+                    <span class="element-type">${element.type.toUpperCase()}</span>
+                    ${element.text}
+                `;
+                return div;
+            }
+            
+            updatePreview() {
+                const content = this.editor.textContent || this.editor.innerText;
+                const elements = this.parseFountainText(content);
+                
+                this.preview.innerHTML = '';
+                elements.forEach(element => {
+                    this.preview.appendChild(this.renderElement(element));
+                });
+            }
+            
+            showCharacterSuggestions() {
+                if (this.characters.size === 0) return;
+                
+                const suggestions = document.createElement('div');
+                suggestions.className = 'suggestions';
+                
+                this.characters.forEach(character => {
+                    const item = document.createElement('div');
+                    item.className = 'suggestion-item';
+                    item.textContent = character;
+                    item.onclick = () => {
+                        this.insertText(character);
+                        this.hideSuggestions();
+                    };
+                    suggestions.appendChild(item);
+                });
+                
+                document.body.appendChild(suggestions);
+                this.currentSuggestions = suggestions;
+                
+                // Position suggestions near cursor
+                const selection = window.getSelection();
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                suggestions.style.position = 'fixed';
+                suggestions.style.left = rect.left + 'px';
+                suggestions.style.top = (rect.bottom + 5) + 'px';
+            }
+            
+            hideSuggestions() {
+                if (this.currentSuggestions) {
+                    this.currentSuggestions.remove();
+                    this.currentSuggestions = null;
+                }
+            }
+            
+            insertText(text) {
+                const selection = window.getSelection();
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(document.createTextNode(text));
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+            
+            loadSampleContent() {
+                const sample = `FADE IN:
+
+EXT. COFFEE SHOP - DAY
+
+A bustling coffee shop on a busy street corner. SARAH (25), a writer with messy hair and paint-stained fingers, sits at a small table by the window.
+
+SARAH
+(muttering to herself)
+Come on, Sarah. Just write something. Anything.
+
+She stares at her laptop screen, fingers hovering over the keyboard.
+
+JACK (30s), charming with an easy smile, approaches her table.
+
+JACK
+Excuse me, is this seat taken?
+
+SARAH looks up, startled.
+
+SARAH
+Oh! No, go ahead.
+
+JACK sits down across from her.
+
+JACK
+Writer's block?
+
+SARAH
+(surprised)
+How did you know?
+
+JACK
+The desperate staring at a blank screen is a dead giveaway. I'm Jack.
+
+SARAH
+Sarah. And yes, major writer's block.
+
+[[This is where their romance begins]]
+
+FADE OUT.`;
+                
+                this.editor.textContent = sample;
+                this.updatePreview();
+            }
+        }
+        
+        // Global functions for toolbar
+        function insertElement(type) {
+            const editor = document.getElementById('fountainEditor');
+            const templates = {
+                scene: 'INT. LOCATION - DAY',
+                character: 'CHARACTER NAME',
+                dialogue: 'Character dialogue goes here.',
+                parenthetical: '(stage direction)',
+                action: 'Action description goes here.',
+                transition: 'CUT TO:',
+                note: '[[Note to self]]'
+            };
+            
+            const selection = window.getSelection();
+            const range = selection.getRangeAt(0);
+            
+            const newLine = document.createElement('div');
+            newLine.textContent = templates[type];
+            
+            range.insertNode(newLine);
+            range.setStartAfter(newLine);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            
+            fountainEditor.updatePreview();
+        }
+        
+        function exportFountain() {
+            const content = document.getElementById('fountainEditor').textContent;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'screenplay.fountain';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function importFountain() {
+            document.getElementById('fileInput').click();
+        }
+        
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('fountainEditor').textContent = e.target.result;
+                    fountainEditor.updatePreview();
+                };
+                reader.readAsText(file);
+            }
+        }
+        
+        // Initialize the editor
+        let fountainEditor;
+        document.addEventListener('DOMContentLoaded', () => {
+            fountainEditor = new EnhancedFountainEditor();
+        });
+    </script>
+</body>
+</html>
