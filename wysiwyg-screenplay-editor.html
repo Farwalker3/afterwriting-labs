@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WYSIWYG Screenplay Editor</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .toolbar {
+            background: #2c3e50;
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .toolbar-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .toolbar-group::after {
+            content: '';
+            width: 1px;
+            height: 20px;
+            background: #34495e;
+            margin-left: 10px;
+        }
+        
+        .toolbar-group:last-child::after {
+            display: none;
+        }
+        
+        .toolbar button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        
+        .toolbar button:hover {
+            background: #2980b9;
+        }
+        
+        .toolbar button.active {
+            background: #e74c3c;
+        }
+        
+        .toolbar select {
+            background: #34495e;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .screenplay-container {
+            max-width: 8.5in;
+            margin: 20px auto;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            min-height: 11in;
+            position: relative;
+        }
+        
+        .screenplay-page {
+            padding: 1in 1.5in 1in 1.5in;
+            min-height: 9in;
+            position: relative;
+        }
+        
+        .screenplay-editor {
+            outline: none;
+            font-family: 'Courier New', monospace;
+            font-size: 12pt;
+            line-height: 1.2;
+            color: #000;
+            min-height: 9in;
+        }
+        
+        /* Screenplay Element Styles */
+        .scene-heading {
+            text-transform: uppercase;
+            font-weight: bold;
+            margin: 24pt 0 12pt 0;
+            text-align: left;
+        }
+        
+        .character {
+            text-transform: uppercase;
+            font-weight: normal;
+            margin: 24pt 0 0 2.2in;
+            text-align: left;
+            width: 2in;
+        }
+        
+        .dialogue {
+            margin: 0 0 12pt 1.5in;
+            width: 3.5in;
+            text-align: left;
+        }
+        
+        .parenthetical {
+            margin: 0 0 0 2in;
+            width: 2in;
+            font-style: normal;
+            text-align: left;
+        }
+        
+        .action {
+            margin: 12pt 0;
+            text-align: left;
+            width: 6in;
+        }
+        
+        .transition {
+            text-transform: uppercase;
+            font-weight: normal;
+            margin: 24pt 0 24pt 4in;
+            text-align: right;
+            width: 2in;
+        }
+        
+        .centered {
+            text-align: center;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin: 24pt 0;
+        }
+        
+        /* Editing States */
+        .element-editing {
+            background: rgba(52, 152, 219, 0.1);
+            border: 1px dashed #3498db;
+            border-radius: 2px;
+        }
+        
+        .element-placeholder {
+            color: #bdc3c7;
+            font-style: italic;
+        }
+        
+        /* Format Buttons */
+        .format-selector {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            display: none;
+        }
+        
+        .format-selector.show {
+            display: block;
+        }
+        
+        .format-option {
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            background: none;
+            text-align: left;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 2px 0;
+        }
+        
+        .format-option:hover {
+            background: #ecf0f1;
+        }
+        
+        /* Page numbers and headers */
+        .page-header {
+            position: absolute;
+            top: 0.5in;
+            right: 1in;
+            font-size: 12pt;
+            color: #666;
+        }
+        
+        /* Character suggestions */
+        .character-suggestions {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            min-width: 200px;
+        }
+        
+        .suggestion-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .suggestion-item:hover {
+            background: #3498db;
+            color: white;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <select id="elementType" onchange="changeElementType(this.value)">
+                <option value="action">Action</option>
+                <option value="scene-heading">Scene Heading</option>
+                <option value="character">Character</option>
+                <option value="dialogue">Dialogue</option>
+                <option value="parenthetical">Parenthetical</option>
+                <option value="transition">Transition</option>
+                <option value="centered">Centered Text</option>
+            </select>
+        </div>
+        
+        <div class="toolbar-group">
+            <button onclick="insertElement('scene-heading')">Scene</button>
+            <button onclick="insertElement('character')">Character</button>
+            <button onclick="insertElement('dialogue')">Dialogue</button>
+            <button onclick="insertElement('action')">Action</button>
+        </div>
+        
+        <div class="toolbar-group">
+            <button onclick="formatText('bold')"><strong>B</strong></button>
+            <button onclick="formatText('italic')"><em>I</em></button>
+            <button onclick="formatText('underline')"><u>U</u></button>
+        </div>
+        
+        <div class="toolbar-group">
+            <button onclick="exportToPDF()">Export PDF</button>
+            <button onclick="exportToFountain()">Export .fountain</button>
+            <button onclick="importFountain()">Import</button>
+        </div>
+        
+        <div class="toolbar-group">
+            <button onclick="undo()">Undo</button>
+            <button onclick="redo()">Redo</button>
+        </div>
+    </div>
+    
+    <div class="screenplay-container">
+        <div class="screenplay-page">
+            <div class="page-header">1.</div>
+            <div id="screenplayEditor" class="screenplay-editor" contenteditable="true"></div>
+        </div>
+    </div>
+    
+    <div id="formatSelector" class="format-selector">
+        <button class="format-option" onclick="applyFormat('action')">Action</button>
+        <button class="format-option" onclick="applyFormat('scene-heading')">Scene Heading</button>
+        <button class="format-option" onclick="applyFormat('character')">Character</button>
+        <button class="format-option" onclick="applyFormat('dialogue')">Dialogue</button>
+        <button class="format-option" onclick="applyFormat('parenthetical')">Parenthetical</button>
+        <button class="format-option" onclick="applyFormat('transition')">Transition</button>
+    </div>
+    
+    <input type="file" id="fileInput" accept=".fountain,.txt" style="display: none;" onchange="handleFileImport(event)">
+    
+    <script>
+        class WYSIWYGScreenplayEditor {
+            constructor() {
+                this.editor = document.getElementById('screenplayEditor');
+                this.characters = new Set(['JOHN', 'SARAH', 'MIKE', 'LISA']);
+                this.currentElement = null;
+                this.undoStack = [];
+                this.redoStack = [];
+                
+                this.setupEditor();
+                this.loadSampleContent();
+            }
+            
+            setupEditor() {
+                this.editor.addEventListener('keydown', (e) => this.handleKeyDown(e));
+                this.editor.addEventListener('keyup', (e) => this.handleKeyUp(e));
+                this.editor.addEventListener('input', (e) => this.handleInput(e));
+                this.editor.addEventListener('click', (e) => this.handleClick(e));
+                this.editor.addEventListener('paste', (e) => this.handlePaste(e));
+                
+                // Hide format selector when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.format-selector') && !e.target.closest('#screenplayEditor')) {
+                        this.hideFormatSelector();
+                    }
+                });
+            }
+            
+            handleKeyDown(e) {
+                const selection = window.getSelection();
+                const currentElement = this.getCurrentElement();
+                
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.handleEnter(currentElement);
+                } else if (e.key === 'Tab') {
+                    e.preventDefault();
+                    this.handleTab(currentElement);
+                } else if (e.key === 'Backspace' && this.isElementEmpty(currentElement)) {
+                    e.preventDefault();
+                    this.handleBackspace(currentElement);
+                } else if (e.ctrlKey || e.metaKey) {
+                    this.handleShortcuts(e);
+                }
+            }
+            
+            handleEnter(currentElement) {
+                const elementType = this.getElementType(currentElement);
+                let nextType = 'action';
+                
+                // Smart next element logic
+                switch(elementType) {
+                    case 'scene-heading':
+                        nextType = 'action';
+                        break;
+                    case 'action':
+                        nextType = 'action';
+                        break;
+                    case 'character':
+                        nextType = 'dialogue';
+                        break;
+                    case 'dialogue':
+                        nextType = 'character';
+                        break;
+                    case 'parenthetical':
+                        nextType = 'dialogue';
+                        break;
+                    case 'transition':
+                        nextType = 'scene-heading';
+                        break;
+                }
+                
+                this.createNewElement(nextType);
+            }
+            
+            handleTab(currentElement) {
+                const elementType = this.getElementType(currentElement);
+                const typeOrder = ['action', 'scene-heading', 'character', 'dialogue', 'parenthetical', 'transition'];
+                const currentIndex = typeOrder.indexOf(elementType);
+                const nextIndex = (currentIndex + 1) % typeOrder.length;
+                const nextType = typeOrder[nextIndex];
+                
+                this.changeElementType(currentElement, nextType);
+                document.getElementById('elementType').value = nextType;
+            }
+            
+            handleInput(e) {
+                const currentElement = this.getCurrentElement();
+                if (currentElement) {
+                    this.autoFormat(currentElement);
+                    this.showCharacterSuggestions(currentElement);
+                }
+                this.saveState();
+            }
+            
+            handleClick(e) {
+                const element = e.target.closest('[class*="scene-heading"], [class*="character"], [class*="dialogue"], [class*="action"], [class*="parenthetical"], [class*="transition"], [class*="centered"]');
+                if (element) {
+                    this.currentElement = element;
+                    const elementType = this.getElementType(element);
+                    document.getElementById('elementType').value = elementType;
+                }
+            }
+            
+            getCurrentElement() {
+                const selection = window.getSelection();
+                if (selection.rangeCount === 0) return null;
+                
+                const range = selection.getRangeAt(0);
+                let element = range.commonAncestorContainer;
+                
+                if (element.nodeType === Node.TEXT_NODE) {
+                    element = element.parentElement;
+                }
+                
+                // Find the screenplay element
+                while (element && element !== this.editor) {
+                    if (element.classList && this.isScreenplayElement(element)) {
+                        return element;
+                    }
+                    element = element.parentElement;
+                }
+                
+                return null;
+            }
+            
+            isScreenplayElement(element) {
+                const classes = ['scene-heading', 'character', 'dialogue', 'action', 'parenthetical', 'transition', 'centered'];
+                return classes.some(cls => element.classList.contains(cls));
+            }
+            
+            getElementType(element) {
+                if (!element || !element.classList) return 'action';
+                
+                const classes = ['scene-heading', 'character', 'dialogue', 'action', 'parenthetical', 'transition', 'centered'];
+                for (let cls of classes) {
+                    if (element.classList.contains(cls)) {
+                        return cls;
+                    }
+                }
+                return 'action';
+            }
+            
+            createNewElement(type, text = '') {
+                const newElement = document.createElement('div');
+                newElement.className = type;
+                newElement.textContent = text || this.getPlaceholderText(type);
+                newElement.contentEditable = true;
+                
+                const selection = window.getSelection();
+                const range = selection.getRangeAt(0);
+                
+                // Insert after current element
+                const currentElement = this.getCurrentElement();
+                if (currentElement) {
+                    currentElement.parentNode.insertBefore(newElement, currentElement.nextSibling);
+                } else {
+                    this.editor.appendChild(newElement);
+                }
+                
+                // Focus new element
+                range.selectNodeContents(newElement);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                
+                this.currentElement = newElement;
+                document.getElementById('elementType').value = type;
+            }
+            
+            changeElementType(element, newType) {
+                if (!element) return;
+                
+                element.className = newType;
+                
+                // Update placeholder if empty
+                if (this.isElementEmpty(element)) {
+                    element.textContent = this.getPlaceholderText(newType);
+                }
+            }
+            
+            getPlaceholderText(type) {
+                const placeholders = {
+                    'scene-heading': 'INT. LOCATION - DAY',
+                    'character': 'CHARACTER NAME',
+                    'dialogue': 'Character dialogue...',
+                    'action': 'Action description...',
+                    'parenthetical': '(parenthetical)',
+                    'transition': 'CUT TO:',
+                    'centered': 'CENTERED TEXT'
+                };
+                return placeholders[type] || '';
+            }
+            
+            isElementEmpty(element) {
+                if (!element) return true;
+                const text = element.textContent.trim();
+                return !text || text === this.getPlaceholderText(this.getElementType(element));
+            }
+            
+            autoFormat(element) {
+                const text = element.textContent.trim();
+                const elementType = this.getElementType(element);
+                
+                // Auto-detect scene headings
+                if (elementType === 'action' && /^(INT\.|EXT\.|EST\.)/i.test(text)) {
+                    this.changeElementType(element, 'scene-heading');
+                    document.getElementById('elementType').value = 'scene-heading';
+                }
+                
+                // Auto-detect character names (all caps)
+                if (elementType === 'action' && /^[A-Z\s]+$/.test(text) && text.length < 30 && text.length > 1) {
+                    this.changeElementType(element, 'character');
+                    document.getElementById('elementType').value = 'character';
+                    this.characters.add(text);
+                }
+                
+                // Auto-detect transitions
+                if (elementType === 'action' && /^(FADE IN:|FADE OUT:|CUT TO:|DISSOLVE TO:)/i.test(text)) {
+                    this.changeElementType(element, 'transition');
+                    document.getElementById('elementType').value = 'transition';
+                }
+            }
+            
+            showCharacterSuggestions(element) {
+                const elementType = this.getElementType(element);
+                if (elementType !== 'character') return;
+                
+                const text = element.textContent.trim().toUpperCase();
+                if (text.length < 2) return;
+                
+                const matches = Array.from(this.characters).filter(char => 
+                    char.toUpperCase().startsWith(text) && char.toUpperCase() !== text
+                );
+                
+                if (matches.length > 0) {
+                    this.showSuggestions(element, matches);
+                } else {
+                    this.hideSuggestions();
+                }
+            }
+            
+            showSuggestions(element, suggestions) {
+                this.hideSuggestions();
+                
+                const suggestionBox = document.createElement('div');
+                suggestionBox.className = 'character-suggestions';
+                suggestionBox.id = 'characterSuggestions';
+                
+                suggestions.forEach(suggestion => {
+                    const item = document.createElement('div');
+                    item.className = 'suggestion-item';
+                    item.textContent = suggestion;
+                    item.onclick = () => {
+                        element.textContent = suggestion;
+                        this.hideSuggestions();
+                        this.focusEnd(element);
+                    };
+                    suggestionBox.appendChild(item);
+                });
+                
+                document.body.appendChild(suggestionBox);
+                
+                // Position suggestions
+                const rect = element.getBoundingClientRect();
+                suggestionBox.style.position = 'fixed';
+                suggestionBox.style.left = rect.left + 'px';
+                suggestionBox.style.top = (rect.bottom + 5) + 'px';
+            }
+            
+            hideSuggestions() {
+                const existing = document.getElementById('characterSuggestions');
+                if (existing) {
+                    existing.remove();
+                }
+            }
+            
+            focusEnd(element) {
+                const range = document.createRange();
+                const selection = window.getSelection();
+                range.selectNodeContents(element);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+            
+            loadSampleContent() {
+                const sample = `
+                    <div class="scene-heading">FADE IN:</div>
+                    <div class="scene-heading">EXT. COFFEE SHOP - DAY</div>
+                    <div class="action">A bustling coffee shop on a busy street corner. SARAH (25), a writer with messy hair and paint-stained fingers, sits at a small table by the window.</div>
+                    <div class="character">SARAH</div>
+                    <div class="parenthetical">(muttering to herself)</div>
+                    <div class="dialogue">Come on, Sarah. Just write something. Anything.</div>
+                    <div class="action">She stares at her laptop screen, fingers hovering over the keyboard.</div>
+                    <div class="action">JACK (30s), charming with an easy smile, approaches her table.</div>
+                    <div class="character">JACK</div>
+                    <div class="dialogue">Excuse me, is this seat taken?</div>
+                    <div class="action">SARAH looks up, startled.</div>
+                    <div class="character">SARAH</div>
+                    <div class="dialogue">Oh! No, go ahead.</div>
+                    <div class="action">JACK sits down across from her.</div>
+                    <div class="character">JACK</div>
+                    <div class="dialogue">Writer's block?</div>
+                    <div class="character">SARAH</div>
+                    <div class="parenthetical">(surprised)</div>
+                    <div class="dialogue">How did you know?</div>
+                    <div class="transition">FADE OUT.</div>
+                `;
+                
+                this.editor.innerHTML = sample;
+                
+                // Make all elements editable
+                this.editor.querySelectorAll('div').forEach(el => {
+                    el.contentEditable = true;
+                });
+            }
+            
+            saveState() {
+                this.undoStack.push(this.editor.innerHTML);
+                if (this.undoStack.length > 50) {
+                    this.undoStack.shift();
+                }
+                this.redoStack = [];
+            }
+        }
+        
+        // Global functions
+        function changeElementType(type) {
+            const currentElement = editor.getCurrentElement();
+            if (currentElement) {
+                editor.changeElementType(currentElement, type);
+            }
+        }
+        
+        function insertElement(type) {
+            editor.createNewElement(type);
+        }
+        
+        function applyFormat(type) {
+            const currentElement = editor.getCurrentElement();
+            if (currentElement) {
+                editor.changeElementType(currentElement, type);
+                document.getElementById('elementType').value = type;
+            }
+            editor.hideFormatSelector();
+        }
+        
+        function formatText(command) {
+            document.execCommand(command, false, null);
+        }
+        
+        function exportToFountain() {
+            const elements = editor.editor.querySelectorAll('div');
+            let fountainText = '';
+            
+            elements.forEach(el => {
+                const type = editor.getElementType(el);
+                const text = el.textContent.trim();
+                if (!text) return;
+                
+                switch(type) {
+                    case 'scene-heading':
+                        fountainText += text.toUpperCase() + '\n\n';
+                        break;
+                    case 'character':
+                        fountainText += text.toUpperCase() + '\n';
+                        break;
+                    case 'dialogue':
+                        fountainText += text + '\n';
+                        break;
+                    case 'parenthetical':
+                        fountainText += text + '\n';
+                        break;
+                    case 'action':
+                        fountainText += text + '\n\n';
+                        break;
+                    case 'transition':
+                        fountainText += text.toUpperCase() + '\n\n';
+                        break;
+                    case 'centered':
+                        fountainText += '>' + text.toUpperCase() + '<\n\n';
+                        break;
+                }
+            });
+            
+            const blob = new Blob([fountainText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'screenplay.fountain';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function exportToPDF() {
+            window.print();
+        }
+        
+        function importFountain() {
+            document.getElementById('fileInput').click();
+        }
+        
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    // Parse fountain text and convert to HTML
+                    const fountainText = e.target.result;
+                    editor.parseFountainToHTML(fountainText);
+                };
+                reader.readAsText(file);
+            }
+        }
+        
+        function undo() {
+            if (editor.undoStack.length > 0) {
+                editor.redoStack.push(editor.editor.innerHTML);
+                editor.editor.innerHTML = editor.undoStack.pop();
+            }
+        }
+        
+        function redo() {
+            if (editor.redoStack.length > 0) {
+                editor.undoStack.push(editor.editor.innerHTML);
+                editor.editor.innerHTML = editor.redoStack.pop();
+            }
+        }
+        
+        // Initialize editor
+        let editor;
+        document.addEventListener('DOMContentLoaded', () => {
+            editor = new WYSIWYGScreenplayEditor();
+        });
+    </script>
+</body>
+</html>
